@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <shellapi.h>
+
+#pragma comment(lib, "shell32.lib")
 
 typedef unsigned char byte;
 typedef unsigned short word;
@@ -247,76 +250,49 @@ int LoadTextFile(const char* filename) {
   return 1;
 }
 
-int ParseCommandLine(const char* cmdLine, char* filename, int filenameSize, int* paletteMode) {
-  const char* p;
-  char* out;
-  int inQuote;
+int ParseCommandLine(char* filename, int filenameSize, int* paletteMode) {
+  LPWSTR* argv;
+  int argc;
+  int i;
   int hasFilename;
+  LPWSTR cmdLine;
 
-  if( cmdLine==0 || cmdLine[0]==0 ) {
+  cmdLine = GetCommandLineW();
+  argv = CommandLineToArgvW(cmdLine, &argc);
+
+  if( argv == NULL ) {
     return 0;
   }
 
   *paletteMode = 0;
   hasFilename = 0;
-  p = cmdLine;
 
-  while( *p != 0 ) {
-    while( *p == ' ' || *p == '\t' ) {
-      p++;
-    }
-
-    if( *p == 0 ) {
-      break;
-    }
-
-    if( *p == '/' ) {
-      if( p[1] == '1' && (p[2] == 0 || p[2] == ' ' || p[2] == '\t') ) {
+  for( i=1; i<argc; i++ ) {
+    if( argv[i][0] == L'/' || argv[i][0] == L'-' ) {
+      if( argv[i][1] == L'1' && argv[i][2] == L'\0' ) {
         *paletteMode = 0;
-        p += 2;
-      } else if( p[1] == '2' && (p[2] == 0 || p[2] == ' ' || p[2] == '\t') ) {
+      } else if( argv[i][1] == L'2' && argv[i][2] == L'\0' ) {
         *paletteMode = 1;
-        p += 2;
       } else {
+        LocalFree(argv);
         return 0;
       }
     } else {
       if( hasFilename ) {
+        LocalFree(argv);
         return 0;
       }
 
-      out = filename;
-      inQuote = 0;
-
-      if( *p == '"' ) {
-        inQuote = 1;
-        p++;
+      if( WideCharToMultiByte(CP_ACP, 0, argv[i], -1, filename, filenameSize, NULL, NULL) == 0 ) {
+        LocalFree(argv);
+        return 0;
       }
 
-      while( *p != 0 ) {
-        if( inQuote ) {
-          if( *p == '"' ) {
-            p++;
-            break;
-          }
-        } else {
-          if( *p == ' ' || *p == '\t' ) {
-            break;
-          }
-        }
-
-        if( out - filename >= filenameSize - 1 ) {
-          return 0;
-        }
-
-        *out++ = *p++;
-      }
-
-      *out = 0;
       hasFilename = 1;
     }
   }
 
+  LocalFree(argv);
   return hasFilename;
 }
 
@@ -332,7 +308,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
   char filename[MAX_PATH];
   int paletteMode;
 
-  if( !ParseCommandLine(lpCmdLine, filename, MAX_PATH, &paletteMode) ) {
+  if( !ParseCommandLine(filename, MAX_PATH, &paletteMode) ) {
     MessageBoxA(NULL, "Usage: textview.exe [/1|/2] <filename>\n\n/1 - Grayscale palette (default)\n/2 - Red/Blue palette", "Error", MB_OK | MB_ICONERROR);
     return 1;
   }

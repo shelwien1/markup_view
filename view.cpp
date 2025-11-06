@@ -586,6 +586,58 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       return 0;
     }
 
+    case WM_MOUSEWHEEL: {
+      int delta;
+      int scrollLines;
+      int maxOffsetY;
+
+      delta = GET_WHEEL_DELTA_WPARAM(wParam);
+      scrollLines = (delta / WHEEL_DELTA) * 3;
+
+      maxOffsetY = (int)g_fileHeight - (int)g_gridHeight;
+      if( maxOffsetY < 0 ) {
+        maxOffsetY = 0;
+      }
+
+      g_offsetY -= scrollLines;
+
+      if( g_offsetY < 0 ) {
+        g_offsetY = 0;
+      }
+      if( g_offsetY > maxOffsetY ) {
+        g_offsetY = maxOffsetY;
+      }
+
+      InvalidateRect(hwnd, NULL, FALSE);
+      return 0;
+    }
+
+    case WM_MOUSEHWHEEL: {
+      int delta;
+      int scrollCols;
+      int maxOffsetX;
+
+      delta = GET_WHEEL_DELTA_WPARAM(wParam);
+      scrollCols = (delta / WHEEL_DELTA) * 3;
+
+      maxOffsetX = (int)g_fileWidth - (int)g_gridWidth;
+      if( maxOffsetX < 0 ) {
+        maxOffsetX = 0;
+      }
+
+      g_offsetX -= scrollCols;
+
+      if( g_offsetX < 0 ) {
+        g_offsetX = 0;
+      }
+      if( g_offsetX > maxOffsetX ) {
+        g_offsetX = maxOffsetX;
+      }
+
+      InvalidateRect(hwnd, NULL, FALSE);
+      return 0;
+    }
+
     case WM_SIZE: {
       int clientWidth;
       int clientHeight;

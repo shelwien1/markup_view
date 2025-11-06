@@ -39,6 +39,7 @@ uint g_totalCells;
 uint g_paragraphCount;
 uint g_displayLineCount;
 uint g_gridWidth;
+uint g_gridHeight;
 uint g_fileWidth;
 uint g_fileHeight;
 int g_offsetX;
@@ -120,9 +121,9 @@ void RecalculateLayout(void) {
   
   g_displayLineCount = totalDisplayLines;
   g_fileHeight = g_displayLineCount;
-  
+
   maxOffsetX = (int)g_fileWidth - (int)g_gridWidth;
-  maxOffsetY = (int)g_fileHeight - GRID_HEIGHT;
+  maxOffsetY = (int)g_fileHeight - (int)g_gridHeight;
   
   if( maxOffsetX < 0 ) {
     maxOffsetX = 0;
@@ -143,15 +144,15 @@ void ResizeWindow(void) {
   RECT rect;
   int windowWidth;
   int windowHeight;
-  
+
   windowWidth = (OFFSET_WIDTH + (int)g_gridWidth) * g_charWidth;
-  windowHeight = GRID_HEIGHT * g_charHeight;
+  windowHeight = (int)g_gridHeight * g_charHeight;
   
   rect.left = 0;
   rect.top = 0;
   rect.right = windowWidth;
   rect.bottom = windowHeight;
-  AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX, FALSE);
+  AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
   
   SetWindowPos(g_hwnd, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
                SWP_NOMOVE | SWP_NOZORDER);
@@ -184,6 +185,7 @@ int LoadTextFile(const char* filename) {
   
   g_totalCells = fileSize / 2;
   g_gridWidth = 80;
+  g_gridHeight = GRID_HEIGHT;
   
   g_buffer = (TextCell*)malloc(sizeof(TextCell) * g_totalCells);
   if( g_buffer==0 ) {
@@ -341,17 +343,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     MessageBoxA(NULL, "Window Registration Failed!", "Error", MB_OK | MB_ICONERROR);
     return 1;
   }
-  
+
   windowWidth = (OFFSET_WIDTH + (int)g_gridWidth) * g_charWidth;
-  windowHeight = GRID_HEIGHT * g_charHeight;
+  windowHeight = (int)g_gridHeight * g_charHeight;
   
   rect.left = 0;
   rect.top = 0;
   rect.right = windowWidth;
   rect.bottom = windowHeight;
   AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
-  
-  hwnd = CreateWindowExA(0, "TextViewerClass", "Text Viewer", WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX,
+
+  hwnd = CreateWindowExA(0, "TextViewerClass", "Text Viewer", WS_OVERLAPPEDWINDOW,
                          CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
                          NULL, NULL, hInstance, NULL);
   
@@ -401,10 +403,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       hdc = BeginPaint(hwnd, &ps);
       SelectObject(hdc, g_font);
       SetBkMode(hdc, OPAQUE);
-      
+
       text[1] = 0;
-      
-      for( y=0; y<GRID_HEIGHT; y++ ) {
+
+      for( y=0; y<(int)g_gridHeight; y++ ) {
         displayLineIdx = (uint)(g_offsetY + y);
         
         if( displayLineIdx < g_displayLineCount ) {
@@ -474,7 +476,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       
       changed = 0;
       maxOffsetX = (int)g_fileWidth - (int)g_gridWidth;
-      maxOffsetY = (int)g_fileHeight - GRID_HEIGHT;
+      maxOffsetY = (int)g_fileHeight - (int)g_gridHeight;
       
       if( maxOffsetX < 0 ) {
         maxOffsetX = 0;
@@ -540,15 +542,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
           break;
         
         case VK_PRIOR:
-          g_offsetY -= GRID_HEIGHT;
+          g_offsetY -= (int)g_gridHeight;
           if( g_offsetY < 0 ) {
             g_offsetY = 0;
           }
           changed = 1;
           break;
-        
+
         case VK_NEXT:
-          g_offsetY += GRID_HEIGHT;
+          g_offsetY += (int)g_gridHeight;
           if( g_offsetY > maxOffsetY ) {
             g_offsetY = maxOffsetY;
           }
@@ -563,8 +565,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
           break;
         
         case VK_END:
-          if( (int)g_displayLineCount > GRID_HEIGHT ) {
-            maxOffsetY = (int)g_displayLineCount - GRID_HEIGHT;
+          if( (int)g_displayLineCount > (int)g_gridHeight ) {
+            maxOffsetY = (int)g_displayLineCount - (int)g_gridHeight;
           } else {
             maxOffsetY = 0;
           }
@@ -580,10 +582,44 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       if( changed != 0 ) {
         InvalidateRect(hwnd, NULL, FALSE);
       }
-      
+
       return 0;
     }
-    
+
+    case WM_SIZE: {
+      int clientWidth;
+      int clientHeight;
+      uint newGridWidth;
+      uint newGridHeight;
+
+      clientWidth = LOWORD(lParam);
+      clientHeight = HIWORD(lParam);
+
+      if( clientWidth > 0 && clientHeight > 0 && g_charWidth > 0 && g_charHeight > 0 ) {
+        newGridWidth = (clientWidth / g_charWidth) - OFFSET_WIDTH;
+        newGridHeight = clientHeight / g_charHeight;
+
+        if( newGridWidth < MIN_WIDTH ) {
+          newGridWidth = MIN_WIDTH;
+        }
+        if( newGridWidth > MAX_WIDTH ) {
+          newGridWidth = MAX_WIDTH;
+        }
+        if( newGridHeight < 1 ) {
+          newGridHeight = 1;
+        }
+
+        if( newGridWidth != g_gridWidth || newGridHeight != g_gridHeight ) {
+          g_gridWidth = newGridWidth;
+          g_gridHeight = newGridHeight;
+          RecalculateLayout();
+          InvalidateRect(hwnd, NULL, FALSE);
+        }
+      }
+
+      return 0;
+    }
+
     case WM_CLOSE:
       DestroyWindow(hwnd);
       return 0;
